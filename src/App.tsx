@@ -15,10 +15,19 @@ import {
   Shield,
   Heart,
   Zap,
-  Download
+  Download,
+  BookOpen,
+  Baby
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { showInstallPrompt, isInstallable, isInstalled } from "@/utils/pwa";
+import { usePediatricKnowledge } from "@/hooks/usePediatricKnowledge";
+import { 
+  enhancePromptWithPediatricKnowledge, 
+  extractMedicalKeywords, 
+  isPediatricQuery,
+  pediatricQuickPrompts 
+} from "@/utils/pediatric-ai-integration";
 
 interface Message {
   id: string;
@@ -41,14 +50,43 @@ export default function MedAssistApp() {
       timestamp: new Date()
     }
   ]);
+
+  // Update welcome message when pediatric mode changes
+  useEffect(() => {
+    if (pediatricMode && isSupabaseEnabled) {
+      setMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[0] = {
+          id: '1',
+          content: 'Hello! I\'m MedAssist AI in Pediatric Mode, powered by Nelson\'s Textbook of Pediatrics. I can help you with pediatric medical questions, child health information, and age-specific medical guidance. Please note that I provide educational information only and cannot replace professional pediatric medical advice. Always consult with qualified pediatric healthcare professionals.',
+          role: 'assistant',
+          timestamp: new Date()
+        };
+        return newMessages;
+      });
+    } else {
+      setMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[0] = {
+          id: '1',
+          content: 'Hello! I\'m MedAssist AI, your medical information assistant. I can help you with general medical questions, symptoms, and health information. Please note that I provide educational information only and cannot replace professional medical advice.',
+          role: 'assistant',
+          timestamp: new Date()
+        };
+        return newMessages;
+      });
+    }
+  }, [pediatricMode, isSupabaseEnabled]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [pediatricMode, setPediatricMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
+  const { getRelatedContent, isSupabaseEnabled } = usePediatricKnowledge();
 
   useEffect(() => {
     // Check if app can be installed
@@ -83,6 +121,36 @@ export default function MedAssistApp() {
       throw new Error('Please set your Gemini API key in settings');
     }
 
+    // Get pediatric context if available and relevant
+    let pediatricContext = undefined;
+    if (isSupabaseEnabled && (pediatricMode || isPediatricQuery(userMessage))) {
+      try {
+        const keywords = extractMedicalKeywords(userMessage);
+        if (keywords.length > 0) {
+          pediatricContext = await getRelatedContent(keywords.join(' '), 3);
+        }
+      } catch (err) {
+        console.warn('Failed to get pediatric context:', err);
+      }
+    }
+
+    // Create enhanced prompt with pediatric knowledge
+    const originalPrompt = `You are MedAssist AI, a helpful medical information assistant. Provide accurate, evidence-based medical information while always emphasizing that this is for educational purposes only and users should consult healthcare professionals for actual medical advice.
+
+IMPORTANT DISCLAIMERS:
+- This is for educational purposes only
+- Always recommend consulting qualified healthcare professionals
+- Do not provide specific diagnoses or treatment plans
+- Emphasize emergency care when appropriate
+
+User question: ${userMessage}`;
+
+    const enhancedPrompt = enhancePromptWithPediatricKnowledge(
+      originalPrompt,
+      userMessage,
+      pediatricContext
+    );
+
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
@@ -91,15 +159,7 @@ export default function MedAssistApp() {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `You are MedAssist AI, a helpful medical information assistant. Provide accurate, evidence-based medical information while always emphasizing that this is for educational purposes only and users should consult healthcare professionals for actual medical advice.
-
-IMPORTANT DISCLAIMERS:
-- This is for educational purposes only
-- Always recommend consulting qualified healthcare professionals
-- Do not provide specific diagnoses or treatment plans
-- Emphasize emergency care when appropriate
-
-User question: ${userMessage}`
+            text: enhancedPrompt
           }]
         }],
         generationConfig: {
@@ -185,7 +245,7 @@ User question: ${userMessage}`
     }
   };
 
-  const quickPrompts = [
+  const quickPrompts = pediatricMode ? pediatricQuickPrompts : [
     "What are the symptoms of dehydration?",
     "How to treat a minor cut?",
     "When should I see a doctor for a headache?",
@@ -255,20 +315,50 @@ User question: ${userMessage}`
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-full">
-                <Stethoscope className="h-5 w-5 text-primary" />
+                {pediatricMode ? (
+                  <Baby className="h-5 w-5 text-primary" />
+                ) : (
+                  <Stethoscope className="h-5 w-5 text-primary" />
+                )}
               </div>
               <div>
-                <h1 className="font-semibold text-lg">MedAssist AI</h1>
-                <p className="text-xs text-muted-foreground">Medical Information Assistant</p>
+                <h1 className="font-semibold text-lg">
+                  MedAssist AI {pediatricMode && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      Pediatric
+                    </Badge>
+                  )}
+                </h1>
+                <p className="text-xs text-muted-foreground">
+                  {pediatricMode ? 'Pediatric Medical Assistant' : 'Medical Information Assistant'}
+                  {isSupabaseEnabled && (
+                    <span className="ml-1">
+                      <BookOpen className="h-3 w-3 inline" />
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setShowSettings(true)}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {isSupabaseEnabled && (
+                <Button
+                  variant={pediatricMode ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setPediatricMode(!pediatricMode)}
+                  className="text-xs"
+                >
+                  <Baby className="h-4 w-4 mr-1" />
+                  Pediatric
+                </Button>
+              )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowSettings(true)}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </header>

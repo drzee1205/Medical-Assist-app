@@ -43,6 +43,80 @@ export interface UsageAnalytics {
   created_at: string
 }
 
+// Nelson's Book of Pediatrics Knowledge Base Types
+export interface PediatricCondition {
+  id: string
+  title: string
+  category: string
+  subcategory?: string
+  description: string
+  symptoms: string[]
+  diagnosis: string
+  treatment: string
+  complications?: string[]
+  prognosis?: string
+  age_groups: string[] // e.g., ['newborn', 'infant', 'toddler', 'child', 'adolescent']
+  icd_codes?: string[]
+  references: string[]
+  chapter: string
+  page_number?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PediatricDrug {
+  id: string
+  name: string
+  generic_name?: string
+  category: string
+  indications: string[]
+  contraindications: string[]
+  dosage_pediatric: string
+  dosage_by_age: {
+    age_group: string
+    dosage: string
+    route: string
+    frequency: string
+  }[]
+  side_effects: string[]
+  warnings: string[]
+  interactions?: string[]
+  monitoring?: string[]
+  references: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface PediatricTopic {
+  id: string
+  title: string
+  category: string
+  content: string
+  key_points: string[]
+  related_conditions: string[] // IDs of related conditions
+  related_drugs: string[] // IDs of related drugs
+  chapter: string
+  section: string
+  page_number?: number
+  tags: string[]
+  references: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface PediatricReference {
+  id: string
+  title: string
+  authors: string[]
+  journal?: string
+  year: number
+  doi?: string
+  pmid?: string
+  url?: string
+  citation: string
+  created_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -65,6 +139,26 @@ export interface Database {
         Row: UsageAnalytics
         Insert: Omit<UsageAnalytics, 'id' | 'created_at'>
         Update: Partial<Omit<UsageAnalytics, 'id' | 'created_at'>>
+      }
+      pediatric_conditions: {
+        Row: PediatricCondition
+        Insert: Omit<PediatricCondition, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<PediatricCondition, 'id' | 'created_at' | 'updated_at'>>
+      }
+      pediatric_drugs: {
+        Row: PediatricDrug
+        Insert: Omit<PediatricDrug, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<PediatricDrug, 'id' | 'created_at' | 'updated_at'>>
+      }
+      pediatric_topics: {
+        Row: PediatricTopic
+        Insert: Omit<PediatricTopic, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<PediatricTopic, 'id' | 'created_at' | 'updated_at'>>
+      }
+      pediatric_references: {
+        Row: PediatricReference
+        Insert: Omit<PediatricReference, 'id' | 'created_at'>
+        Update: Partial<Omit<PediatricReference, 'id' | 'created_at'>>
       }
     }
   }
